@@ -68,8 +68,13 @@ This application features:
 ![img_4_2025-03](imgs/10788eed4fc6e9154b1a9e5e61450138fe8a7ec6ce6fdf661e3e85fd58f0b3c9.png)  
 
 
-### Demo
+## Demo
 
+### Application Demo
 https://github.com/user-attachments/assets/f9a665f8-09f8-44f5-aaa1-a5769b5fc47d
+
+### Autocomplete
+https://github.com/user-attachments/assets/c9302333-4610-4565-a50e-424ca8042263
+
 
 
