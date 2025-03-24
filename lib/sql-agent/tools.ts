@@ -3,7 +3,8 @@ import { StructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 
 // Setup BigQuery client
-const projectId = "shunyasea-sanskriti";
+const projectId = process.env.GOOGLE_PROJECT_ID;
+// console.log(projectId)
 const bigqueryClient = new BigQuery({ projectId });
 
 /**

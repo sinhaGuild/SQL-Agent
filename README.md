@@ -24,7 +24,7 @@ This application features:
       - Catches syntax errors before execution
       - Provides detailed error messages for refinement
   2) Query Type Safety
-      - Ensures queries are read-only (SELECT only)
+      - Ensures queries are read-only (`SELECT` only)
       - Prevents any data modification operations
       - Falls back to safe queries when needed
   3) Dry Run Execution
@@ -59,6 +59,36 @@ This application features:
 - `@microsoft/fetch-event-source` for Live Streaming
 - `ZOD` for Type asserts
 - `ShadCN` components
+
+## How to use
+
+### Authentication
+This application relies on locating your google credentials using ADC. This means if you haven’t explicitly set the GOOGLE_APPLICATION_CREDENTIALS environment variable, the library will automatically use the credentials from your gcloud CLI (assuming you’re authenticated via `gcloud auth login`) or the credentials provided by the runtime environment (e.g., Compute Engine IAM credentials). 
+
+Run the below command to login to your gcloud instance which has a BigQuery database configured with datasets you'd like to query.
+
+```sh
+gcloud auth application-default login
+```
+
+### Setup `projectId`
+
+You can set the `GOOGLE_PROJECT_ID` environment variable in your terminal or create a `.env` file in the root of the project. Set this project to be the one where you have BigQuery configured.
+
+```sh
+export GOOGLE_PROJECT_ID="your-project-id"
+
+or 
+
+touch .env
+echo "GOOGLE_PROJECT_ID=your-project-id" >> .env
+```
+
+### Run the application
+```sh
+pnpm i
+pnpm dev
+```
 
 ## Screens
 
