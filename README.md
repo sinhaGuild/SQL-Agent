@@ -14,6 +14,36 @@
 
 # SQL Agent
 This application features:
+- Natural langugage to SQL Generation and execution.
+- SQL validation
+  1) Added syntax validation using `node-sql-parser`
+      - Catches syntax errors before execution
+      - Provides detailed error messages for refinement
+  2) Query Type Safety
+      - Ensures queries are read-only (SELECT only)
+      - Prevents any data modification operations
+      - Falls back to safe queries when needed
+  3) Dry Run Execution
+       - Added BigQuery dry run validation
+       - Tests queries without executing them
+       - Catches BigQuery-specific errors early
+  4) Schema Compatibility Check
+     - Validates queries against table schemas
+     - Ensures referenced tables and columns exist
+     - Provides warnings for potential schema issues
+  5) Query Complexity Limits
+     - Prevents overly complex queries
+     - Limits joins and nested subqueries
+     - Avoids performance issues with large datasets
+  6) Iterative Query Refinement
+     - Implements AI-powered query correction
+     - Uses LLM to fix invalid queries
+     - Supports multiple refinement attempts
+  7) Robust Fallback Mechanisms
+     - Gracefully handles validation failures
+     - Falls back to simple, safe queries
+     - Ensures users always get some results
+
 
 
 ## Technology Stack used
