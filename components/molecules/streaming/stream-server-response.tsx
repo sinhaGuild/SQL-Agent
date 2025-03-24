@@ -25,6 +25,12 @@ interface Message {
     timestamp: Date;
 }
 
+// Interface for schema field
+interface SchemaField {
+    value: string;
+    label: string;
+}
+
 function StreamingComponent() {
     // State to hold the user's input in the form
     const [queryInput, setQueryInput] = useState<string>("");
@@ -49,6 +55,157 @@ function StreamingComponent() {
     const [queryExplanation, setQueryExplanation] = useState<string | null>(null);
     // State to toggle between table and chart view
     const [showChart, setShowChart] = useState<boolean>(false);
+    // State for schema fields autocomplete
+    const [schemaFields, setSchemaFields] = useState<SchemaField[]>([]);
+    // State for autocomplete dropdown
+    const [showAutocomplete, setShowAutocomplete] = useState<boolean>(false);
+    // State for filtered schema fields
+    const [filteredFields, setFilteredFields] = useState<SchemaField[]>([]);
+    // State for cursor position
+    const [cursorPosition, setCursorPosition] = useState<number>(0);
+    // State for selected autocomplete item
+    const [selectedIndex, setSelectedIndex] = useState<number>(0);
+    // State for schema loading
+    const [isLoadingSchema, setIsLoadingSchema] = useState<boolean>(true);
+    // Ref for textarea
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+    // Fetch schema fields when component mounts
+    useEffect(() => {
+        const fetchSchemaFields = async () => {
+            setIsLoadingSchema(true);
+            toast.loading("Introspecting Schema...", {
+                id: "schema-toast",
+                duration: Infinity,
+            });
+
+            try {
+                const response = await fetch("/api/schema");
+                if (!response.ok) {
+                    throw new Error("Failed to fetch schema fields");
+                }
+                const data = await response.json();
+
+                // Format fields as SchemaField objects
+                const formattedFields = data.fields.map((field: string) => {
+                    // Use the full field path as both value and label
+                    return {
+                        value: field,
+                        label: field // Format as dataset_id.table_id.field_name
+                    };
+                });
+
+                setSchemaFields(formattedFields);
+                toast.success("Schema loaded successfully", {
+                    id: "schema-toast",
+                    duration: 3000,
+                });
+            } catch (error) {
+                console.error("Error fetching schema fields:", error);
+                toast.error("Failed to load schema fields for autocomplete", {
+                    id: "schema-toast",
+                    duration: 5000,
+                });
+            } finally {
+                setIsLoadingSchema(false);
+            }
+        };
+
+        fetchSchemaFields();
+    }, []);
+
+    // Handle input change with autocomplete
+    const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+        const value = e.target.value;
+        setQueryInput(value);
+
+        // Get cursor position
+        const cursorPos = e.target.selectionStart || 0;
+        setCursorPosition(cursorPos);
+
+        // Check if we should show autocomplete
+        const textBeforeCursor = value.substring(0, cursorPos);
+        const atSymbolIndex = textBeforeCursor.lastIndexOf("@");
+
+        if (atSymbolIndex !== -1 && atSymbolIndex < cursorPos) {
+            // Get the text between @ and cursor
+            const searchText = textBeforeCursor.substring(atSymbolIndex + 1).toLowerCase();
+
+            // Filter schema fields based on search text
+            const filtered = schemaFields.filter(field =>
+                field.label.toLowerCase().includes(searchText)
+            ).slice(0, 20); // Increased limit to 20 results
+
+            setFilteredFields(filtered);
+            setShowAutocomplete(filtered.length > 0);
+            setSelectedIndex(0); // Reset selected index when filtering changes
+        } else {
+            setShowAutocomplete(false);
+        }
+    };
+
+    // Effect to scroll selected item into view
+    useEffect(() => {
+        if (showAutocomplete && selectedIndex >= 0) {
+            const selectedItem = document.getElementById(`autocomplete-item-${selectedIndex}`);
+            if (selectedItem) {
+                selectedItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        }
+    }, [selectedIndex, showAutocomplete]);
+
+    // Handle keyboard navigation for autocomplete
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+        if (!showAutocomplete) return;
+
+        switch (e.key) {
+            case 'ArrowDown':
+                e.preventDefault();
+                setSelectedIndex(prev => (prev < filteredFields.length - 1 ? prev + 1 : prev));
+                break;
+            case 'ArrowUp':
+                e.preventDefault();
+                setSelectedIndex(prev => (prev > 0 ? prev - 1 : 0));
+                break;
+            case 'Enter':
+                if (filteredFields.length > 0) {
+                    e.preventDefault();
+                    handleSelectField(filteredFields[selectedIndex]);
+                }
+                break;
+            case 'Escape':
+                e.preventDefault();
+                setShowAutocomplete(false);
+                break;
+        }
+    };
+
+    // Handle selection from autocomplete
+    const handleSelectField = (field: SchemaField) => {
+        // Get the text before and after the @ symbol
+        const textBeforeCursor = queryInput.substring(0, cursorPosition);
+        const atSymbolIndex = textBeforeCursor.lastIndexOf("@");
+        const textBeforeAt = queryInput.substring(0, atSymbolIndex);
+        const textAfterCursor = queryInput.substring(cursorPosition);
+
+        // Replace the text between @ and cursor with the selected field
+        const newText = `${textBeforeAt}@${field.label}${textAfterCursor}`;
+        setQueryInput(newText);
+
+        // Close autocomplete
+        setShowAutocomplete(false);
+
+        // Focus back on textarea and set cursor position after the inserted field
+        if (textareaRef.current) {
+            textareaRef.current.focus();
+            const newCursorPos = atSymbolIndex + field.label.length + 1; // +1 for the @ symbol
+            setTimeout(() => {
+                if (textareaRef.current) {
+                    textareaRef.current.setSelectionRange(newCursorPos, newCursorPos);
+                }
+            }, 0);
+        }
+    };
 
     // Handle form submission
     const handleSubmit = (e: React.FormEvent) => {
@@ -481,13 +638,52 @@ function StreamingComponent() {
                     {/* Form with Input and Submit Button */}
                     <form onSubmit={handleSubmit} className="flex flex-col gap-2">
                         <Label htmlFor="message">Your Query</Label>
-                        <Textarea
-                            value={queryInput}
-                            onChange={(e) => setQueryInput(e.target.value)}
-                            placeholder="Enter your query about the database"
-                            disabled={isFetching}
-                            className="min-h-24"
-                        />
+                        <div className="relative">
+                            <Textarea
+                                ref={textareaRef}
+                                value={queryInput}
+                                onChange={handleInputChange}
+                                onKeyDown={handleKeyDown}
+                                placeholder={isLoadingSchema ? "Loading schema fields..." : "Enter your query about the database (use @ to autocomplete schema fields)"}
+                                disabled={isFetching || isLoadingSchema}
+                                className="min-h-24"
+                            />
+
+                            {showAutocomplete && (
+                                <div className="absolute z-10 w-full max-h-60 overflow-y-auto bg-white border border-gray-200 rounded-md shadow-lg mt-1">
+                                    <div className="p-1">
+                                        <table className="w-full border-collapse">
+                                            <thead className="bg-gray-50">
+                                                <tr>
+                                                    <th className="px-2 py-1 text-left text-xs font-medium text-gray-500">Field Name</th>
+                                                    <th className="px-2 py-1 text-left text-xs font-medium text-gray-500">Dataset.Table</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {filteredFields.map((field, index) => {
+                                                    // Split the field label into parts
+                                                    const parts = field.label.split('.');
+                                                    const fieldName = parts[2] || ''; // field_id
+                                                    const datasetTable = `${parts[0]}.${parts[1]}` || ''; // dataset_id.table_id
+
+                                                    return (
+                                                        <tr
+                                                            key={index}
+                                                            id={`autocomplete-item-${index}`}
+                                                            className={`hover:bg-gray-100 cursor-pointer ${selectedIndex === index ? 'bg-gray-100' : ''}`}
+                                                            onClick={() => handleSelectField(field)}
+                                                        >
+                                                            <td className="px-2 py-1 border-t border-gray-100 font-medium">{fieldName}</td>
+                                                            <td className="px-2 py-1 border-t border-gray-100 text-gray-500 text-sm">{datasetTable}</td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     </form>
                 </CardContent>
                 <CardFooter className="flex justify-between">
@@ -501,7 +697,7 @@ function StreamingComponent() {
                     <Button
                         type="submit"
                         onClick={handleSubmit}
-                        disabled={isFetching || !queryInput.trim()}
+                        disabled={isFetching || !queryInput.trim() || isLoadingSchema}
                         className="relative"
                     >
                         {isFetching ? (

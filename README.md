@@ -15,7 +15,11 @@
 # SQL Agent
 This application features:
 - Natural langugage to SQL Generation and execution.
-- SQL validation
+- Autocomplete feature which introspects attached databases at component mount. Helps users write SQL queries more efficiently.
+- Data Extraction and charting
+- SQL Query Explanation
+- Summary Reducer
+- Robust SQL validation
   1) Added syntax validation using `node-sql-parser`
       - Catches syntax errors before execution
       - Provides detailed error messages for refinement
