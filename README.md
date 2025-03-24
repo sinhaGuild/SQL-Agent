@@ -35,6 +35,7 @@ This application features:
 
 
 ### Demo
-![Demo](./public/sql_agent_demo.mp4)
+
+https://github.com/user-attachments/assets/f9a665f8-09f8-44f5-aaa1-a5769b5fc47d
 
 
