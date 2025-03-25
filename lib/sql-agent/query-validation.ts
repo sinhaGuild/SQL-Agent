@@ -1,6 +1,47 @@
 import { Parser } from 'node-sql-parser';
 
 /**
+ * Checks if table names with hyphens are properly quoted
+ * @param query SQL query to check
+ * @returns Object indicating if table names are properly quoted
+ */
+export function validateTableNames(query: string): { valid: boolean; error?: string } {
+    // Match table names that contain hyphens but aren't wrapped in backticks or double quotes
+    const unquotedHyphenatedTables = query.match(/(?:from|join)\s+([a-zA-Z0-9-]+(?:-[a-zA-Z0-9-]+)+)(?!\s*`|\s*")/gi);
+
+    if (unquotedHyphenatedTables) {
+        return {
+            valid: false,
+            error: `Table names containing hyphens must be wrapped in backticks or double quotes: ${unquotedHyphenatedTables.join(', ')}`
+        };
+    }
+
+    return { valid: true };
+}
+
+/**
+ * Checks for potential null value issues in numeric operations
+ * @param query SQL query to check
+ * @returns Object indicating if null values are properly handled
+ */
+export function validateNullHandling(query: string): { valid: boolean; error?: string } {
+    // Check for numeric operations without null handling
+    const numericOperations = query.match(/(?:sum|avg|min|max)\s*\([^)]*\)/gi);
+
+    if (numericOperations) {
+        const unhandledNulls = numericOperations.filter(op => !op.toLowerCase().includes('coalesce'));
+        if (unhandledNulls.length > 0) {
+            return {
+                valid: false,
+                error: `Numeric operations should handle null values using COALESCE: ${unhandledNulls.join(', ')}`
+            };
+        }
+    }
+
+    return { valid: true };
+}
+
+/**
  * Validates SQL syntax using node-sql-parser
  * @param query SQL query to validate
  * @returns Object indicating if the query is valid and any error message

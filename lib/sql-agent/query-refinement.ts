@@ -1,5 +1,20 @@
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { ChatOpenAI } from "@langchain/openai";
+import { validateNullHandling, validateTableNames } from "./query-validation";
+
+/**
+ * Adds LIMIT clause to a query if it doesn't have one
+ * @param query SQL query to modify
+ * @param maxRows Maximum number of rows to return
+ * @returns Modified query with LIMIT clause
+ */
+function addQueryLimit(query: string, maxRows: number = 1000): string {
+    const normalizedQuery = query.trim().toLowerCase();
+    if (!normalizedQuery.includes('limit')) {
+        return `${query.trim()} LIMIT ${maxRows}`;
+    }
+    return query;
+}
 
 /**
  * Refines a SQL query based on error messages or validation issues
@@ -15,7 +30,19 @@ export async function refineQuery(
 ): Promise<string> {
     const llm = new ChatOpenAI({ modelName: "gpt-4o-mini" });
 
-    let systemPrompt = "You are a SQL expert. Fix the provided BigQuery SQL query based on the error message.";
+    // Handle JSON parsing errors
+    if (error.includes('not valid JSON')) {
+        // Remove any invalid characters and try to extract just the SQL
+        query = query.replace(/^(Query exec|Error exec).*?```sql\s*/i, '')
+            .replace(/```[\s\S]*$/, '')
+            .trim();
+    }
+
+    let systemPrompt = `You are a SQL expert. Fix the provided BigQuery SQL query based on the error message.
+Key requirements:
+- Wrap table names containing hyphens in backticks or double quotes
+- Use COALESCE for numeric operations to handle null values
+- Keep queries efficient and within context limits`;
 
     if (schema) {
         systemPrompt += " Use the provided schema information to ensure the query is valid.";
@@ -23,7 +50,7 @@ export async function refineQuery(
 
     const messages = [
         new SystemMessage(systemPrompt),
-        new HumanMessage(`Fix this BigQuery SQL query:
+        new HumanMessage(`Fix this BigQuery SQL query and ensure it follows best practices:
 \`\`\`sql
 ${query}
 \`\`\`
@@ -41,6 +68,9 @@ Return ONLY the fixed SQL query without any explanations or markdown formatting.
 
     // Remove any markdown code blocks if present
     refinedQuery = refinedQuery.replace(/```sql\n/g, '').replace(/```/g, '').trim();
+
+    // Add LIMIT if not present to control result size
+    refinedQuery = addQueryLimit(refinedQuery);
 
     return refinedQuery;
 }
@@ -61,9 +91,27 @@ export async function validateAndRefineQuery(
 ): Promise<{ query: string; validationResult: { valid: boolean; error?: string } }> {
     let currentQuery = query;
     let attempts = 0;
-    let validationResult: { valid: boolean; error?: string };
+    let validationResult: { valid: boolean; error?: string } = { valid: true };
+
+    // Add LIMIT if not present to control result size
+    currentQuery = addQueryLimit(currentQuery);
 
     do {
+        // Run all validations
+        const tableNameValidation = validateTableNames(currentQuery);
+        if (!tableNameValidation.valid) {
+            currentQuery = await refineQuery(currentQuery, tableNameValidation.error || '', schema);
+            attempts++;
+            continue;
+        }
+
+        const nullHandlingValidation = validateNullHandling(currentQuery);
+        if (!nullHandlingValidation.valid) {
+            currentQuery = await refineQuery(currentQuery, nullHandlingValidation.error || '', schema);
+            attempts++;
+            continue;
+        }
+
         validationResult = await validateFn(currentQuery);
 
         if (validationResult.valid) {
